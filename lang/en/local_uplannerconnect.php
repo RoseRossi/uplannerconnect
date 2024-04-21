@@ -41,7 +41,7 @@ $string['syncerroruplannertask'] = 'Send registers no processing in uPlanner Tas
 
 // Register
 $string['uplanner_log_processing'] = ' Registration processed successfully';
-$string['uplanner_log_dont_processing'] = 'Registration processed incorrectly';
+$string['uplanner_log_dont_processing'] = 'Error in message sent to uPlanner';
 
 // Module
 $string['pluginname'] = 'uPlannerConnect';

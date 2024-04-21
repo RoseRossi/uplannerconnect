@@ -8,6 +8,7 @@
 
 namespace local_uplannerconnect\infrastructure\api;
 
+use local_uplannerconnect\application\messages\connection;
 use local_uplannerconnect\application\repository\general_repository;
 use local_uplannerconnect\application\repository\messages_status_repository;
 use local_uplannerconnect\application\repository\repository_type;
@@ -94,37 +95,46 @@ class handle_clean_uplanner_task
      * @return void
      */
     public function process($page_size = 1000) {
-        $this->create_log($this->prefix . $this->task_id . '_log');
-        $this->log->add_line("------------------------------------------  UPLANNER - PROCESS START - FOREACH REPOSITORIES ------------------------------------------ ");
-        $log_id = $this->general_repository->add_log_data();
-        foreach (repository_type::ACTIVE_REPOSITORY_TYPES as $type => $repository_class) {
-            $this->log->add_line('------- CREATE REPOSITORY OBJECT: ' . $type . ' - ' . $repository_class  . PHP_EOL);
-            $repository = new $repository_class($type);
-            $uplanner_client = $this->uplanner_client_factory->create($type);
-            $this->start_process_per_repository(
-                $repository,
-                $uplanner_client,
-                $page_size
-            );
+        try {
+            $connection = connection::getInstance()->getConnection();
+            if ($connection) {
+                $this->create_log($this->prefix . $this->task_id . '_log');
+                $this->log->add_line("------------------------------------------  UPLANNER - PROCESS START - FOREACH REPOSITORIES ------------------------------------------ ");
+                $log_id = $this->general_repository->add_log_data();
+                foreach (repository_type::ACTIVE_REPOSITORY_TYPES as $type => $repository_class) {
+                    $this->log->add_line('------- CREATE REPOSITORY OBJECT: ' . $type . ' - ' . $repository_class  . PHP_EOL);
+                    $repository = new $repository_class($type);
+                    $uplanner_client = $this->uplanner_client_factory->create($type);
+                    $this->start_process_per_repository(
+                        $repository,
+                        $uplanner_client,
+                        $page_size
+                    );
+                }
+                $this->log->add_line("------------------------------------------            ADD LOGS (COUNT LOGS)     ------------------------------------------ ");
+                $this->general_repository->add_log_errors_data($log_id);
+                $this->log->add_line("-------------------------------------- UPLANNER - DELETE LOGS (success and is_sucessful = 1)------------------------------------------ ");
+                foreach (repository_type::ACTIVE_REPOSITORY_TYPES as $type => $repository_class) {
+                    $repository = new $repository_class($type);
+                    // Remove registers with operation complete
+                    $condition = [
+                        'success' => 1,
+                        'is_sucessful' => 1
+                    ];
+                    $this->general_repository->delete_rows($repository::TABLE, $condition);
+                }
+                $this->log->add_line("------------------------------------------            UPLANNER - PROCESS FINISHED             ------------------------------------------ ");
+                $this->send_email(
+                    $this->prefix . $this->task_id . '_log',
+                    $this->log
+                );
+                $this->log->reset_log();
+            } else {
+                mtrace('Connection failed, error invalid data or credentials' . PHP_EOL);
+            }
+        } catch (moodle_exception $e) {
+            error_log('get_messages: ' . $e->getMessage() . PHP_EOL);
         }
-        $this->log->add_line("------------------------------------------            ADD LOGS (COUNT LOGS)     ------------------------------------------ ");
-        $this->general_repository->add_log_errors_data($log_id);
-        $this->log->add_line("-------------------------------------- UPLANNER - DELETE LOGS (success and is_sucessful = 1)------------------------------------------ ");
-        foreach (repository_type::ACTIVE_REPOSITORY_TYPES as $type => $repository_class) {
-            $repository = new $repository_class($type);
-            // Remove registers with operation complete
-            $condition = [
-                'success' => 1,
-                'is_sucessful' => 1
-            ];
-            $this->general_repository->delete_rows($repository::TABLE, $condition);
-        }
-        $this->log->add_line("------------------------------------------            UPLANNER - PROCESS FINISHED             ------------------------------------------ ");
-        $this->send_email(
-            $this->prefix . $this->task_id . '_log',
-            $this->log
-        );
-        $this->log->reset_log();
     }
 
     /**

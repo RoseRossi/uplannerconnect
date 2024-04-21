@@ -66,7 +66,7 @@ class messages_status_repository
                 });
                 $message = reset($filtered_messages);
                 $is_successful = 0;
-                $ds_error = 'Connection failed, error invalid data';
+                $ds_error = 'Not found in uPlanner database.';
                 $state = $row->success;
                 if ($message) {
                     if (($message['is_successful'] === 1 || $message['is_successful'] === '1')) {
@@ -86,6 +86,10 @@ class messages_status_repository
                 ];
                 if ($updateStatus) {
                     $data['success'] = $state;
+                }
+
+                if ($updateStatus && !$message) {
+                    $data['success'] = repository_type::STATE_UP_ERROR;
                 }
                 $log->add_line(' --- UV UPDATE: ' . json_encode($data));
                 $repository->updateDataBD($data);
